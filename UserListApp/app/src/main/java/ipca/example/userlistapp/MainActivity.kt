@@ -18,8 +18,10 @@ import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
 import dagger.hilt.android.AndroidEntryPoint
 import ipca.example.userlistapp.ui.UserDetailView
-import ipca.example.userlistapp.ui.UserListScreen // <--- IMPORTANTE: Importar o Screen e não apenas a View
+import ipca.example.userlistapp.ui.UserListScreen
+import ipca.example.userlistapp.ui.history.HistoryView // Certifica-te que criaste o ficheiro neste package
 import ipca.example.userlistapp.ui.login.LoginView
+import ipca.example.userlistapp.ui.profile.ProfileView // Certifica-te que criaste o ficheiro neste package
 import ipca.example.userlistapp.ui.theme.UserListAppTheme
 
 @AndroidEntryPoint
@@ -32,6 +34,7 @@ class MainActivity : ComponentActivity() {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     val navController = rememberNavController()
 
+                    // Verifica se o utilizador já está logado ao iniciar
                     LaunchedEffect(Unit) {
                         val user = Firebase.auth.currentUser
                         if (user != null) {
@@ -47,17 +50,24 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.padding(innerPadding)
                     ) {
                         composable("login") {
-                            LoginView(onLoginSuccess = {
-                                navController.navigate("user_list") {
-                                    popUpTo("login") { inclusive = true }
+                            LoginView(
+                                onLoginSuccess = {
+                                    // Login normal -> vai para a lista
+                                    navController.navigate("user_list") {
+                                        popUpTo("login") { inclusive = true }
+                                    }
+                                },
+                                onRegisterSuccess = {
+                                    // Registo -> vai para o Perfil em modo Onboarding
+                                    navController.navigate("profile?onboarding=true") {
+                                        popUpTo("login") { inclusive = true }
+                                    }
                                 }
-                            })
+                            )
                         }
 
-                        // --- AQUI ESTÁ A MUDANÇA PRINCIPAL ---
+                        // ROTA 2: LISTA DE UTILIZADORES
                         composable("user_list") {
-                            // Usamos UserListScreen em vez de UserListView.
-                            // A Screen encarrega-se de chamar o ViewModel.
                             UserListScreen(
                                 modifier = Modifier.fillMaxSize(),
                                 onUserClick = { userId ->
@@ -68,11 +78,51 @@ class MainActivity : ComponentActivity() {
                                     navController.navigate("login") {
                                         popUpTo(0)
                                     }
+                                },
+                                onProfileClick = {
+                                    navController.navigate("profile")
+                                },
+                                onHistoryClick = {
+                                    // Navega sem parâmetros para mostrar o histórico global
+                                    navController.navigate("history")
                                 }
                             )
                         }
-                        // -------------------------------------
 
+// Atualizar a rota do Profile para aceitar argumento
+                        composable(
+                            route = "profile?onboarding={onboarding}",
+                            arguments = listOf(
+                                navArgument("onboarding") {
+                                    defaultValue = false
+                                    type = NavType.BoolType
+                                }
+                            )
+                        ) { backStackEntry ->
+                            val isOnboarding = backStackEntry.arguments?.getBoolean("onboarding") ?: false
+
+                            ProfileView(
+                                navController = navController,
+                                isOnboarding = isOnboarding,
+                                onLogout = {
+                                    navController.navigate("login") { popUpTo(0) }
+                                },
+                                onSaveSuccess = {
+                                    // Se estivermos em modo onboarding, ao guardar vamos para a lista
+                                    if (isOnboarding) {
+                                        navController.navigate("user_list") {
+                                            // Remove o ecrã de perfil da pilha para não voltar atrás
+                                            popUpTo("profile?onboarding=true") { inclusive = true }
+                                        }
+                                    } else {
+                                        // Se for edição normal, pode mostrar um Toast ou voltar atrás
+                                        navController.popBackStack()
+                                    }
+                                }
+                            )
+                        }
+
+                        // ROTA 4: DETALHE DO UTILIZADOR
                         composable(
                             route = "user_detail/{userId}",
                             arguments = listOf(navArgument("userId") { type = NavType.StringType })
@@ -84,6 +134,21 @@ class MainActivity : ComponentActivity() {
                                 navController = navController,
                                 modifier = Modifier.fillMaxSize()
                             )
+                        }
+
+                        // ROTA 5: HISTÓRICO (GLOBAL OU PESSOAL)
+                        composable(
+                            route = "history?userId={userId}",
+                            arguments = listOf(
+                                navArgument("userId") {
+                                    nullable = true
+                                    defaultValue = null
+                                    type = NavType.StringType
+                                }
+                            )
+                        ) { backStackEntry ->
+                            val userId = backStackEntry.arguments?.getString("userId")
+                            HistoryView(navController = navController, userId = userId)
                         }
                     }
                 }

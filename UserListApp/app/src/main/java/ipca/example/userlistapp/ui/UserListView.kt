@@ -9,6 +9,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.List // <--- Importante para o ícone de histórico
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,13 +39,15 @@ import ipca.example.userlistapp.ui.theme.UserListAppTheme
 fun UserListScreen(
     modifier: Modifier = Modifier,
     onUserClick: (String) -> Unit = {},
-    onLogout: () -> Unit = {}
+    onLogout: () -> Unit = {},
+    onProfileClick: () -> Unit = {},
+    onHistoryClick: () -> Unit = {} // <--- NOVO PARÂMETRO
 ) {
     val viewModel: UserListViewModel = hiltViewModel()
     val uiState by viewModel.uiState
 
     LaunchedEffect(Unit) {
-        viewModel.fetchUsers() // Carregamento inicial (normal)
+        viewModel.fetchUsers()
     }
 
     UserListView(
@@ -51,9 +55,10 @@ fun UserListScreen(
         uiState = uiState,
         onUserClick = onUserClick,
         onLogout = onLogout,
+        onProfileClick = onProfileClick,
+        onHistoryClick = onHistoryClick, // <--- PASSAR A AÇÃO
         onRoleSelected = { role -> viewModel.filterByRole(role) },
-        // Ação de Reload força a rede (true)
-        onReload = { viewModel.fetchUsers(forceNetwork = true) }
+        onReload = { viewModel.fetchUsers(forceNetwork = true) },
     )
 }
 
@@ -64,8 +69,10 @@ fun UserListView(
     uiState: UserListState,
     onUserClick: (String) -> Unit = {},
     onLogout: () -> Unit = {},
+    onProfileClick: () -> Unit = {},
+    onHistoryClick: () -> Unit = {}, // <--- NOVO PARÂMETRO
     onRoleSelected: (String) -> Unit = {},
-    onReload: () -> Unit = {} // Novo parâmetro para o Reload
+    onReload: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -83,7 +90,24 @@ fun UserListView(
                             contentDescription = "Recarregar"
                         )
                     }
-                    // 2. Botão de Logout
+
+                    // 2. Botão de Histórico (NOVO)
+                    IconButton(onClick = onHistoryClick) {
+                        Icon(
+                            imageVector = Icons.Default.List,
+                            contentDescription = "Histórico Global"
+                        )
+                    }
+
+                    // 3. Botão de Perfil
+                    IconButton(onClick = onProfileClick) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Perfil"
+                        )
+                    }
+
+                    // 4. Botão de Logout
                     IconButton(onClick = onLogout) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ExitToApp,
@@ -130,7 +154,6 @@ fun UserListView(
                             textAlign = TextAlign.Center,
                             modifier = Modifier.padding(16.dp)
                         )
-                        // Botão extra de tentar novamente no centro do ecrã em caso de erro
                         androidx.compose.material3.Button(onClick = onReload) {
                             Text("Tentar Novamente")
                         }
@@ -168,7 +191,7 @@ fun UserListPreview() {
             isLoading = false,
             filteredUsers = listOf(
                 User(
-                    id = 1, firstName = "Fabio", lastName = "Teste", email = "fabio@example.com",
+                    id = 1, firstName = "Fabio", lastName = "Costa", email = "fabio@example.com",
                     phone = "123", image = null, address = null, maidenName = null, age = 30,
                     gender = "male", username = "fabio", birthDate = null, bloodGroup = null,
                     height = null, weight = null, eyeColor = null, hair = null, ip = null,
