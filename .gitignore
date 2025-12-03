@@ -1,0 +1,26 @@
+# --- Variáveis de Ambiente (Onde ficam as chaves de API) ---
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+*.env.js
+
+# --- Firebase (Arquivos de Configuração Sensíveis) ---
+# Android
+google-services.json
+
+# iOS
+GoogleService-Info.plist
+
+# Firebase Admin SDK / Service Accounts (Backend)
+service-account.json
+firebase-adminsdk.json
+*.json # Cuidado com esta linha se você tiver JSONs públicos, prefira nomear os arquivos de chave especificamente
+*creds.json
+*credentials.json
+
+# Logs e Cache do Firebase
+firebase-debug.log
+.firebase/
