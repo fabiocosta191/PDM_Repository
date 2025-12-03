@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Este é o tema base correto para usar com Material 3 -->
+    <style name="Theme.UserListApp" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- Personaliza aqui as tuas cores se quiseres -->
+    </style>
+</resources>
