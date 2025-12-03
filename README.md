@@ -1,7 +1,9 @@
+#PDM_Repository
+Repositório para arquivar o projetos de PDM
 
-|                       |                                                                   |
-|-----------------------|-------------------------------------------------------------------|
+--------
 | **Nome**              | Fábio Rafael Gomes Costa                                          |
+|-----------------------|-------------------------------------------------------------------|
 | **Email**             | a22997@alunos.ipca.pt                                             |
 | **Unidade Curricular**| Programação de Dispositivos Móveis                                |
 | **Curso**             | Licenciatura em Engenharia de Sistemas Informáticos               |
