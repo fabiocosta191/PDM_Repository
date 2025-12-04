@@ -13,6 +13,7 @@ data class LoginState(
     var email: String = "",
     var password: String = "",
     var error: String? = null,
+    var resetPasswordMessage: String? = null,
     var isLoading: Boolean = false
 )
 
@@ -26,14 +27,13 @@ class LoginViewModel @Inject constructor(
         private set
 
     fun onEmailChange(email: String) {
-        uiState.value = uiState.value.copy(email = email)
+        uiState.value = uiState.value.copy(email = email, error = null, resetPasswordMessage = null)
     }
 
     fun onPasswordChange(password: String) {
-        uiState.value = uiState.value.copy(password = password)
+        uiState.value = uiState.value.copy(password = password, error = null)
     }
 
-    // Função auxiliar para gravar o histórico
     private fun logAction(userId: String, email: String, action: String) {
         val log = AuditLog(
             userId = userId,
@@ -41,10 +41,34 @@ class LoginViewModel @Inject constructor(
             action = action,
             timestamp = Timestamp.now()
         )
-        // Guardar na coleção "audit_logs"
         firestore.collection("audit_logs").add(log)
     }
 
+    // --- ATUALIZADO: Aceita email como parâmetro ---
+    fun resetPassword(emailInput: String) {
+        if (emailInput.isBlank()) {
+            uiState.value = uiState.value.copy(error = "Escreva o seu email para recuperar a password")
+            return
+        }
+
+        uiState.value = uiState.value.copy(isLoading = true, error = null, resetPasswordMessage = null)
+
+        auth.sendPasswordResetEmail(emailInput)
+            .addOnCompleteListener { task ->
+                uiState.value = uiState.value.copy(isLoading = false)
+                if (task.isSuccessful) {
+                    uiState.value = uiState.value.copy(
+                        resetPasswordMessage = "Email enviado para $emailInput! Verifique a sua caixa de entrada."
+                    )
+                } else {
+                    uiState.value = uiState.value.copy(
+                        error = task.exception?.localizedMessage ?: "Erro ao enviar email"
+                    )
+                }
+            }
+    }
+
+    // Login mantém-se igual (lê do estado principal)
     fun login(onSuccess: () -> Unit) {
         val email = uiState.value.email
         val password = uiState.value.password
@@ -54,14 +78,13 @@ class LoginViewModel @Inject constructor(
             return
         }
 
-        uiState.value = uiState.value.copy(isLoading = true, error = null)
+        uiState.value = uiState.value.copy(isLoading = true, error = null, resetPasswordMessage = null)
 
         auth.signInWithEmailAndPassword(email, password)
             .addOnCompleteListener { task ->
                 if (task.isSuccessful) {
                     val user = auth.currentUser
                     if (user != null) {
-                        // Regista o Login no histórico
                         logAction(user.uid, user.email ?: email, "LOGIN")
                     }
                     uiState.value = uiState.value.copy(isLoading = false)
@@ -75,31 +98,26 @@ class LoginViewModel @Inject constructor(
             }
     }
 
-    fun register(onSuccess: () -> Unit) {
-        val email = uiState.value.email
-        val password = uiState.value.password
-
-        if (email.isBlank() || password.isBlank()) {
-            uiState.value = uiState.value.copy(error = "Preencha todos os campos")
+    // --- ATUALIZADO: Aceita email e password como parâmetros ---
+    fun register(emailInput: String, passwordInput: String, onSuccess: () -> Unit) {
+        if (emailInput.isBlank() || passwordInput.isBlank()) {
+            uiState.value = uiState.value.copy(error = "Preencha todos os campos de registo")
             return
         }
 
-        uiState.value = uiState.value.copy(isLoading = true, error = null)
+        uiState.value = uiState.value.copy(isLoading = true, error = null, resetPasswordMessage = null)
 
-        auth.createUserWithEmailAndPassword(email, password)
+        auth.createUserWithEmailAndPassword(emailInput, passwordInput)
             .addOnCompleteListener { task ->
                 if (task.isSuccessful) {
                     val user = auth.currentUser
                     if (user != null) {
-                        // 1. Cria o documento do utilizador na coleção "users"
                         val userData = hashMapOf(
-                            "email" to email,
-                            "name" to email.substringBefore("@")
+                            "email" to emailInput,
+                            "name" to emailInput.substringBefore("@")
                         )
                         firestore.collection("users").document(user.uid).set(userData)
-
-                        // 2. Regista a Criação de Conta no histórico
-                        logAction(user.uid, email, "CRIACAO_CONTA")
+                        logAction(user.uid, emailInput, "CRIACAO_CONTA")
                     }
 
                     uiState.value = uiState.value.copy(isLoading = false)
@@ -111,5 +129,10 @@ class LoginViewModel @Inject constructor(
                     )
                 }
             }
+    }
+
+    // Função helper para limpar mensagens ao fechar dialogs
+    fun clearErrors() {
+        uiState.value = uiState.value.copy(error = null, resetPasswordMessage = null)
     }
 }

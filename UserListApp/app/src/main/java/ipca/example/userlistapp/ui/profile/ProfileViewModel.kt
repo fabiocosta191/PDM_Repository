@@ -7,7 +7,7 @@ import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.lifecycle.HiltViewModel
-import ipca.example.userlistapp.models.AuditLog // Importar o modelo AuditLog
+import ipca.example.userlistapp.models.AuditLog
 import javax.inject.Inject
 
 data class ProfileState(
@@ -17,7 +17,8 @@ data class ProfileState(
     val phone: String = "",
     val isLoading: Boolean = false,
     val error: String? = null,
-    val isAccountDeleted: Boolean = false
+    val isAccountDeleted: Boolean = false,
+    val passwordChangeSuccess: Boolean = false // <--- NOVO CAMPO
 )
 
 @HiltViewModel
@@ -33,6 +34,7 @@ class ProfileViewModel @Inject constructor(
         loadUserProfile()
     }
 
+    // ... (loadUserProfile mantém-se igual) ...
     private fun loadUserProfile() {
         val user = auth.currentUser
         if (user == null) {
@@ -40,7 +42,11 @@ class ProfileViewModel @Inject constructor(
             return
         }
 
-        uiState.value = uiState.value.copy(isLoading = true, email = user.email ?: "",userId = user.uid)
+        uiState.value = uiState.value.copy(
+            isLoading = true,
+            email = user.email ?: "",
+            userId = user.uid
+        )
 
         firestore.collection("users").document(user.uid).get()
             .addOnSuccessListener { document ->
@@ -61,6 +67,7 @@ class ProfileViewModel @Inject constructor(
             }
     }
 
+    // ... (onNameChange, onPhoneChange mantêm-se iguais) ...
     fun onNameChange(newValue: String) {
         uiState.value = uiState.value.copy(name = newValue)
     }
@@ -69,7 +76,6 @@ class ProfileViewModel @Inject constructor(
         uiState.value = uiState.value.copy(phone = newValue)
     }
 
-    // Função auxiliar atualizada para usar AuditLog
     private fun logAction(userId: String, email: String, action: String, details: String = "") {
         val log = AuditLog(
             userId = userId,
@@ -81,7 +87,7 @@ class ProfileViewModel @Inject constructor(
         firestore.collection("audit_logs").add(log)
     }
 
-    // Adicionar o parâmetro onSuccess
+    // ... (saveProfile e deleteAccount mantêm-se iguais) ...
     fun saveProfile(onSuccess: () -> Unit = {}) {
         val user = auth.currentUser ?: return
         uiState.value = uiState.value.copy(isLoading = true)
@@ -97,8 +103,6 @@ class ProfileViewModel @Inject constructor(
                 logAction(user.uid, uiState.value.email, "EDICAO_DADOS", "Nome: ${uiState.value.name}")
                 uiState.value = uiState.value.copy(isLoading = false, error = null)
                 Log.d("ProfileViewModel", "Dados guardados com sucesso")
-
-                // Chamar o callback de sucesso
                 onSuccess()
             }
             .addOnFailureListener { e ->
@@ -108,30 +112,60 @@ class ProfileViewModel @Inject constructor(
 
     fun deleteAccount() {
         val user = auth.currentUser ?: return
-
-        // CORREÇÃO: Definir as variáveis antes de usar
         val userId = user.uid
         val userEmail = user.email ?: ""
 
         uiState.value = uiState.value.copy(isLoading = true)
-
-        // Registar log ANTES de apagar
         logAction(userId, userEmail, "REMOCAO_CONTA")
 
-        // 1. Apagar dados do Firestore
         firestore.collection("users").document(userId).delete()
             .addOnSuccessListener {
-                // 2. Apagar utilizador do Authentication
                 user.delete()
                     .addOnSuccessListener {
                         uiState.value = uiState.value.copy(isLoading = false, isAccountDeleted = true)
                     }
                     .addOnFailureListener { e ->
-                        uiState.value = uiState.value.copy(isLoading = false, error = "Erro ao apagar conta: ${e.localizedMessage}. Tente fazer login novamente.")
+                        uiState.value = uiState.value.copy(isLoading = false, error = "Erro auth: ${e.localizedMessage}")
                     }
             }
             .addOnFailureListener { e ->
-                uiState.value = uiState.value.copy(isLoading = false, error = "Erro ao apagar dados: ${e.localizedMessage}")
+                uiState.value = uiState.value.copy(isLoading = false, error = "Erro dados: ${e.localizedMessage}")
             }
+    }
+
+    // --- NOVA FUNÇÃO: ALTERAR PASSWORD ---
+    fun changePassword(newPassword: String) {
+        val user = auth.currentUser
+        if (user != null) {
+            // Validar password simples
+            if (newPassword.length < 6) {
+                uiState.value = uiState.value.copy(error = "A password deve ter pelo menos 6 caracteres")
+                return
+            }
+
+            uiState.value = uiState.value.copy(isLoading = true, error = null, passwordChangeSuccess = false)
+
+            user.updatePassword(newPassword)
+                .addOnCompleteListener { task ->
+                    uiState.value = uiState.value.copy(isLoading = false)
+                    if (task.isSuccessful) {
+                        uiState.value = uiState.value.copy(
+                            passwordChangeSuccess = true,
+                            error = null
+                        )
+                        logAction(user.uid, user.email ?: "", "ALTERACAO_PASSWORD")
+                    } else {
+                        // Se falhar (ex: requer login recente), mostra o erro
+                        uiState.value = uiState.value.copy(
+                            error = task.exception?.localizedMessage ?: "Erro ao alterar password"
+                        )
+                    }
+                }
+        }
+    }
+
+    // Função para resetar o status de sucesso (usado pela View)
+    fun resetPasswordChangeStatus() {
+        uiState.value = uiState.value.copy(passwordChangeSuccess = false)
     }
 }
